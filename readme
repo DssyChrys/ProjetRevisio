@@ -1,0 +1,5 @@
+/api/User/register      // Inscription
+/api/User/login         // Connexion
+/api/User/find/:UserId  // Récupérer un utilisateur
+/api/User/              // Liste des utilisateurs
+/api/files/upload       // Téléverser un fichier pour traitement
