@@ -11,6 +11,13 @@ app.use(cors());
 app.use('/api/User', UserRoute);
 
 const uri = process.env.ATLAS_URI;
+const corsOptions = {
+    origin: 'http://localhost:5174', // Origine du front-end
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Méthodes HTTP autorisées
+    allowedHeaders: ['Content-Type', 'Authorization'], // Headers autorisés
+};
+
+app.use(cors(corsOptions));
 
 app.get('/', (req, res)=>{
     res.send('Bienvenue sur la page accueil');
