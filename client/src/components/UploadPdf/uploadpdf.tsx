@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import axios from "axios";
-import Summary from "./summary.tsx";
 import { FiFileText } from "react-icons/fi"; // Icône PDF
 
 export default function Upload() {
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);  // État pour le résumé
+  const [downloadLink, setDownloadLink] = useState<string | null>(null);  // Lien de téléchargement
   const [error, setError] = useState<string | null>(null); // État pour les erreurs
 
   // Fonction pour gérer le changement de fichier
@@ -49,16 +48,18 @@ export default function Upload() {
         headers: {
           "Content-Type": "multipart/form-data",
         },
+        responseType: "blob", // Important pour recevoir un fichier
       });
       console.log("Fichier envoyé avec succès", response.data);
 
-      // Vérifier la présence du résumé dans la réponse
-      if (response.data.summary) {
-        setSummary(response.data.summary); // Mettre à jour l'état avec le résumé retourné par le back-end
-        setError(null); // Réinitialiser l'erreur si le résumé est généré correctement
-      } else {
-        setError("Le résumé n'a pas pu être généré.");
-      }
+      // Crée un lien pour télécharger le fichier généré
+      const fileBlob = new Blob([response.data], { type: "text/plain" });
+      const downloadUrl = URL.createObjectURL(fileBlob);
+
+      // Mettre à jour l'état pour le lien de téléchargement
+      setDownloadLink(downloadUrl);
+
+      setError(null); // Réinitialiser l'erreur si le résumé est généré correctement
     } catch (error) {
       console.error("Erreur lors de l'envoi du fichier", error);
       setError("Une erreur s'est produite lors de l'envoi du fichier.");
@@ -129,11 +130,16 @@ export default function Upload() {
           Générer
         </button>
 
-        {/* Afficher le résumé généré */}
-        {summary && (
-          <div className="mt-6 bg-gray-100 p-4 rounded-md shadow-md">
-            <h2 className="font-bold text-xl">Résumé du document :</h2>
-            <div className="mt-2">{summary && <Summary summary={summary} />}</div>
+        {/* Afficher le lien de téléchargement */}
+        {downloadLink && (
+          <div className="mt-6">
+            <a
+              href={downloadLink}
+              download="summary.txt"
+              className="block text-center py-2 px-4 bg-green-600 text-white rounded-md shadow-md hover:bg-green-700 focus:outline-none"
+            >
+              Télécharger le résumé
+            </a>
           </div>
         )}
 

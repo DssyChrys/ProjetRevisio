@@ -61,71 +61,72 @@ const upload = multer({ storage, fileFilter });
 
 // Fonction pour générer un résumé structuré et colorier les informations importantes
 async function generateSummary(text) {
-    const maxLength = 1000; // Diviser en morceaux de 1000 tokens ou caractères
-    const chunkSize = maxLength - 50; // Réduire un peu pour éviter les erreurs de dépassement de limite
-  
-    // Diviser le texte en morceaux plus petits
-    const chunks = [];
-    for (let i = 0; i < text.length; i += chunkSize) {
-      chunks.push(text.substring(i, i + chunkSize));
-    }
-  
-    // Stocker tous les résumés générés
-    let fullSummary = '';
-  
-    // Fonction pour appliquer des couleurs
-    const highlightImportantInfo = (text) => {
-      // Exemple : mettre en surbrillance les mots "important" et "clé"
-      const highlightedText = text.replace(/\b(important|clé|essentiel)\b/gi, (match) => {
-        return `<span style="color: red; font-weight: bold;">${match}</span>`;
-      });
-      return highlightedText;
-    };
-  
-    // Fonction de réessai en cas d'échec de l'API Hugging Face
-    const retry = async (chunk) => {
-      let retries = 5;
-      let lastError = null;
-  
-      while (retries > 0) {
-        try {
-          const response = await axios.post('https://api-inference.huggingface.co/models/facebook/bart-large-cnn', {
-            inputs: chunk,
-            parameters: {
-              max_length: 150, // Ajustez la longueur du résumé comme nécessaire
-            },
-          }, {
-            headers: {
-              'Authorization': `Bearer ${hfApiKey}`,
-              'Content-Type': 'application/json',
-            },
-          });
-  
-          return response.data[0]?.summary_text || '';
-        } catch (error) {
-          if (error.response?.data?.error === 'Model is currently loading') {
-            console.log('Le modèle est en train de se charger. Nouvelle tentative dans 10 secondes...');
-            await new Promise(resolve => setTimeout(resolve, 10000)); // Attendre 10 secondes avant de réessayer
-            retries--;
-          } else {
-            lastError = error;
-            break;
-          }
+  const maxLength = 1000; // Diviser en morceaux de 1000 tokens ou caractères
+  const chunkSize = maxLength - 50; // Réduire un peu pour éviter les erreurs de dépassement de limite
+
+  // Diviser le texte en morceaux plus petits
+  const chunks = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.substring(i, i + chunkSize));
+  }
+
+  // Stocker tous les résumés générés
+  let fullSummary = '';
+
+  // Fonction pour appliquer des couleurs
+  const highlightImportantInfo = (text) => {
+    // Exemple : mettre en surbrillance les mots "important" et "clé"
+    const highlightedText = text.replace(/\b(important|clé|essentiel)\b/gi, (match) => {
+      return `<span style="color: red; font-weight: bold;">${match}</span>`;
+    });
+    return highlightedText;
+  };
+
+  // Fonction de réessai en cas d'échec de l'API Hugging Face
+  const retry = async (chunk) => {
+    let retries = 5;
+    let lastError = null;
+
+    while (retries > 0) {
+      try {
+        const response = await axios.post('https://api-inference.huggingface.co/models/facebook/bart-large-cnn', {
+          inputs: chunk,
+          parameters: {
+            max_length: 150, // Ajustez la longueur du résumé comme nécessaire
+          },
+        }, {
+          headers: {
+            'Authorization': `Bearer ${hfApiKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        return response.data[0]?.summary_text || '';
+      } catch (error) {
+        if (error.response?.data?.error === 'Model is currently loading') {
+          console.log('Le modèle est en train de se charger. Nouvelle tentative dans 10 secondes...');
+          await new Promise(resolve => setTimeout(resolve, 10000)); // Attendre 10 secondes avant de réessayer
+          retries--;
+        } else {
+          lastError = error;
+          break;
         }
       }
-  
-      return lastError ? `Une erreur est survenue : ${lastError.message}` : 'Résumé non généré.';
-    };
-  
-    // Traitement de chaque morceau de texte
-    for (const chunk of chunks) {
-      const summary = await retry(chunk);
-      fullSummary += highlightImportantInfo(summary);
     }
-  
-    // Retourner le résumé global
-    return fullSummary || 'Résumé non généré.';
+
+    return lastError ? `Une erreur est survenue : ${lastError.message}` : 'Résumé non généré.';
+  };
+
+  // Traitement de chaque morceau de texte
+  for (const chunk of chunks) {
+    const summary = await retry(chunk);
+    fullSummary += highlightImportantInfo(summary);
   }
+
+  // Retourner le résumé global
+  return fullSummary || 'Résumé non généré.';
+}
+
 
 
 // Endpoint pour l'upload de PDF
@@ -145,8 +146,22 @@ app.post('/api/User/upload-pdf', upload.single('pdf'), async (req, res) => {
     // Utilisation de Hugging Face pour générer un résumé en français
     const summary = await generateSummary(text);
 
-    fs.unlinkSync(pdfPath);  // Supprimer le fichier après traitement
-    res.json({ summary: summary });
+    // Enregistrer le résumé dans un fichier texte
+    const filePath = 'uploads/summary.txt';
+    fs.writeFileSync(filePath, summary, 'utf8'); // Enregistre le résumé dans le fichier
+
+    fs.unlinkSync(pdfPath);  // Supprimer le fichier PDF après traitement
+
+    // Envoyer le fichier texte au frontend
+    res.download(filePath, 'summary.txt', (err) => {
+      if (err) {
+        console.error("Erreur lors de l'envoi du fichier :", err);
+        res.status(500).send("Erreur lors de l'envoi du fichier.");
+      } else {
+        // Optionnel : Supprimer le fichier après l'envoi
+        fs.unlinkSync(filePath);
+      }
+    });
   } catch (error) {
     console.error("Erreur lors du traitement du fichier PDF :", error);
     res.status(500).json({ error: 'Erreur lors du traitement du PDF.' });
